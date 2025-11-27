@@ -3,11 +3,16 @@ A 3D toy I created using Gemini 3 and Perplexity AI. It uses a nunchuk connected
 
 ## Controls
 
-C - Toggle Accelerometer
+C - Next Shape
 <br/>
-Double click on C - Change Shape
+Double click on C - Toggle Accelerometer
 <br/>
-Z - Change Hue
+Z - Phase
+<br/>
+Double click on Z - Shift Hue
+
+
+Don't double-click too fast; it will register as a single click. Aim for about a 400 ms interval between clicks, but don't make it longer than 500 ms.
 
 ![Preview](https://raw.githubusercontent.com/Northstrix/The-Space-Stuff/refs/heads/main/preview.webp)
 
