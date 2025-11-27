@@ -32,6 +32,7 @@
     <!--
         Credit:
             https://codepen.io/Gopi-Chakradhar/pen/NPGBopb
+            https://codepen.io/VoXelo/pen/dPMeGze
             https://unpkg.com/react@18/umd/react.production.min.js
             https://unpkg.com/react-dom@18/umd/react-dom.production.min.js
             https://unpkg.com/@babel/standalone/babel.min.js
@@ -903,12 +904,25 @@
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
-                    <button style={buttonStyle} onClick={() => window.triggerMorph && window.triggerMorph()}>
-                    Change Shape
-                    </button>
-                    <button style={buttonStyle} onClick={() => window.triggerHueShift && window.triggerHueShift()}>
-                    Change Hue
-                    </button>
+
+                <button
+                    style={buttonStyle}
+                    onClick={() => window.triggerMorph && window.triggerMorph()}
+                >
+                    Next Shape
+                </button>
+                <button
+                    style={buttonStyle}
+                    onClick={() => window.triggerHueShift && window.triggerHueShift()}
+                >
+                    Shift Hue
+                </button>
+                <button
+                    style={buttonStyle}
+                    onClick={() => window.triggerPhase && window.triggerPhase()}
+                >
+                    Phase
+                </button>
                 </div>
                 </div>
 
@@ -950,7 +964,7 @@
     let noise3D, noise4D;
     let isMorphing = false;
     let morphTimeline = null;
-    let currentShapeIndex = 11; // Not used directly, reset in createParticleSystem
+    let currentShapeIndex = 3;
     let morphState = { progress: 0.0 };
 
     // Physics / Movement
@@ -961,83 +975,86 @@
     // Buttons / input state
     let cClickTimeout = null;
     let cClickCount = 0;
+    let cClickTimer = null;
     let cPressed = false;
+    let zClickCount = 0;
+    let zClickTimer = null;
     let zPressed = false;
+    let zClickTimeout = null;
+    let zDoubleClickDetected = false;
+
+    // Phase / wave state
+    let phaseState = {
+    active: false,
+    startTime: 0,
+    speed: 350,
+    duration: 4.0,
+    radiusMax: 4000,
+    origin: new THREE.Vector3()
+    };
+    let isPhasing = false;
+
     window.currentHue = window.currentHue ?? 0.6;
     let currentHue = window.currentHue;
 
     const CONFIG = {
-        particleCount: 25000,
-        shapeSize: 250,
-        swirlFactor: 5.0,
-        noiseFrequency: 0.02,
-        morphDuration: 3000,
-        bloomStrength: 1.8,
-        bloomRadius: 0.8,
-        bloomThreshold: 0.1,
-        maxSpeed: 800,
-        drag: 0.96,
+    particleCount: 25000,
+    shapeSize: 250,
+    swirlFactor: 5.0,
+    noiseFrequency: 0.02,
+    morphDuration: 3000,
+    bloomStrength: 1.8,
+    bloomRadius: 0.8,
+    bloomThreshold: 0.1,
+    maxSpeed: 800,
+    drag: 0.96,
+    zDoubleClickWindow: 500
     };
 
     // Keyboard + mouse nav state
     window.keysForNav = {};
     window.mouseDownForNav = false;
-
-    window.addEventListener('keydown', (e) => {
-        window.keysForNav[e.key.toLowerCase()] = true;
-    });
-
-    window.addEventListener('keyup', (e) => {
-        window.keysForNav[e.key.toLowerCase()] = false;
-    });
-
-    window.addEventListener('mousedown', (e) => {
-        if (e.button === 0) window.mouseDownForNav = true;
-    });
-
-    window.addEventListener('mouseup', (e) => {
-        if (e.button === 0) window.mouseDownForNav = false;
-    });
+    window.addEventListener('keydown', (e) => { window.keysForNav[e.key.toLowerCase()] = true; });
+    window.addEventListener('keyup', (e) => { window.keysForNav[e.key.toLowerCase()] = false; });
+    window.addEventListener('mousedown', (e) => { if (e.button === 0) window.mouseDownForNav = true; });
+    window.addEventListener('mouseup', (e) => { if (e.button === 0) window.mouseDownForNav = false; });
 
     // --- Shape Generators ---
     function generateSphere(count, size) {
-        const points = new Float32Array(count * 3);
-        const phi = Math.PI * (Math.sqrt(5) - 1);
-        for (let i = 0; i < count; i++) {
+    const points = new Float32Array(count * 3);
+    const phi = Math.PI * (Math.sqrt(5) - 1);
+    for (let i = 0; i < count; i++) {
         const y = 1 - (i / (count - 1)) * 2;
         const radius = Math.sqrt(1 - y * y);
         const theta = phi * i;
         points[i * 3] = Math.cos(theta) * radius * size;
         points[i * 3 + 1] = y * size;
         points[i * 3 + 2] = Math.sin(theta) * radius * size;
-        }
-        return points;
+    }
+    return points;
     }
 
     function generateGalaxy(count, size) {
-        const points = new Float32Array(count * 3);
-        const arms = 5;
-        for (let i = 0; i < count; i++) {
+    const points = new Float32Array(count * 3);
+    const arms = 5;
+    for (let i = 0; i < count; i++) {
         const t = Math.pow(Math.random(), 1.5);
         const radius = t * size * 1.5;
-        const armOffset =
-            (Math.floor(Math.random() * arms) / arms) * Math.PI * 2;
+        const armOffset = (Math.floor(Math.random() * arms) / arms) * Math.PI * 2;
         const rotation = (radius / size) * 5;
-        const theta =
-            armOffset + rotation + (Math.random() - 0.5) * 0.5;
+        const theta = armOffset + rotation + (Math.random() - 0.5) * 0.5;
         points[i * 3] = radius * Math.cos(theta);
-        points[i * 3 + 1] =
-            (Math.random() - 0.5) * size * 0.2 * (1 - t);
+        points[i * 3 + 1] = (Math.random() - 0.5) * size * 0.2 * (1 - t);
         points[i * 3 + 2] = radius * Math.sin(theta);
-        }
-        return points;
+    }
+    return points;
     }
 
     function generateLotusOrb(count, size) {
-        const points = new Float32Array(count * 3);
-        const phi = Math.PI * (Math.sqrt(5) - 1);
-        const radDisplace = size * 0.2;
-        for (let i = 0; i < count; i++) {
+    const points = new Float32Array(count * 3);
+    const phi = Math.PI * (Math.sqrt(5) - 1);
+    const radDisplace = size * 0.2;
+    for (let i = 0; i < count; i++) {
         const y = 1 - (i / (count - 1)) * 2;
         const rBase = Math.sqrt(1 - y * y);
         const theta = phi * i;
@@ -1045,230 +1062,167 @@
         const z0 = Math.sin(theta) * rBase;
         const lon = Math.atan2(z0, x0);
         const lat = Math.asin(y);
-        const disp =
-            Math.sin(6 * lon + Math.cos(4 * lat) * 2.0) * radDisplace;
+        const disp = Math.sin(6 * lon + Math.cos(4 * lat) * 2.0) * radDisplace;
         const r = size + disp;
         points[i * 3] = x0 * r;
         points[i * 3 + 1] = y * size;
         points[i * 3 + 2] = z0 * r;
-        }
-        return points;
+    }
+    return points;
     }
 
     function generateDoubleHelix(count, size) {
-        const points = new Float32Array(count * 3);
-        const turns = 5;
-        const height = size * 2.5;
-        for (let i = 0; i < count; i++) {
+    const points = new Float32Array(count * 3);
+    const turns = 5;
+    const height = size * 2.5;
+    for (let i = 0; i < count; i++) {
         const t = i / count;
         const angle = t * Math.PI * 2 * turns;
         const y = (t - 0.5) * height;
         const radius = size * 0.5;
         const strand = i % 2 === 0 ? 1 : -1;
         const phase = strand === 1 ? 0 : Math.PI;
-        points[i * 3] =
-            Math.cos(angle + phase) * radius +
-            (Math.random() - 0.5) * 20;
+        points[i * 3] = Math.cos(angle + phase) * radius + (Math.random() - 0.5) * 20;
         points[i * 3 + 1] = y;
-        points[i * 3 + 2] =
-            Math.sin(angle + phase) * radius +
-            (Math.random() - 0.5) * 20;
-        }
-        return points;
+        points[i * 3 + 2] = Math.sin(angle + phase) * radius + (Math.random() - 0.5) * 20;
+    }
+    return points;
     }
 
     function generateTorus(count, size) {
-        const points = new Float32Array(count * 3);
-        const R = size * 0.8;
-        const r = size * 0.3;
-        for (let i = 0; i < count; i++) {
+    const points = new Float32Array(count * 3);
+    const R = size * 0.8;
+    const r = size * 0.3;
+    for (let i = 0; i < count; i++) {
         const u = Math.random() * Math.PI * 2;
         const v = Math.random() * Math.PI * 2;
         points[i * 3] = (R + r * Math.cos(v)) * Math.cos(u);
         points[i * 3 + 1] = r * Math.sin(v);
         points[i * 3 + 2] = (R + r * Math.cos(v)) * Math.sin(u);
-        }
-        return points;
+    }
+    return points;
     }
 
     const SHAPES = [
-        { name: 'Sphere', generator: generateSphere },
-        { name: 'Galaxy', generator: generateGalaxy },
-        { name: 'DoubleHelix', generator: generateDoubleHelix },
-        { name: 'Lotus', generator: generateLotusOrb },
-        { name: 'Torus', generator: generateTorus },
+    { name: 'Sphere', generator: generateSphere },
+    { name: 'Galaxy', generator: generateGalaxy },
+    { name: 'DoubleHelix', generator: generateDoubleHelix },
+    { name: 'Lotus', generator: generateLotusOrb },
+    { name: 'Torus', generator: generateTorus },
     ];
 
     // --- Init Function ---
     function init() {
-        clock = new THREE.Clock();
-        noise3D = createNoise3D();
-        noise4D = createNoise4D();
+    clock = new THREE.Clock();
+    noise3D = createNoise3D();
+    noise4D = createNoise4D();
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000810, 0.0005);
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set(0, 100, 800);
+    renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    document.body.appendChild(renderer.domElement);
 
-        scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000810, 0.0005);
+    const renderScene = new RenderPass(scene, camera);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), CONFIG.bloomStrength, CONFIG.bloomRadius, CONFIG.bloomThreshold);
+    composer = new EffectComposer(renderer);
+    composer.addPass(renderScene);
+    composer.addPass(bloomPass);
 
-        camera = new THREE.PerspectiveCamera(
-        70,
-        window.innerWidth / window.innerHeight,
-        1,
-        10000
-        );
-        camera.position.set(0, 100, 800);
+    createStarfield();
+    createParticleSystem();
+    window.addEventListener('resize', onWindowResize);
 
-        renderer = new THREE.WebGLRenderer({
-        antialias: false,
-        powerPreference: 'high-performance',
-        });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-        document.body.appendChild(renderer.domElement);
-
-        // Post Processing
-        const renderScene = new RenderPass(scene, camera);
-        const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        CONFIG.bloomStrength,
-        CONFIG.bloomRadius,
-        CONFIG.bloomThreshold
-        );
-
-        composer = new EffectComposer(renderer);
-        composer.addPass(renderScene);
-        composer.addPass(bloomPass);
-
-        createStarfield();
-        createParticleSystem();
-
-        window.addEventListener('resize', onWindowResize);
-
-        setTimeout(() => {
+    setTimeout(() => {
         const el = document.getElementById('loading');
         if (el) el.classList.add('fade-out');
-        }, 1000);
+    }, 1000);
 
-        animate();
+    animate();
     }
 
     function createStarTexture() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 32;
-        canvas.height = 32;
-        const ctx = canvas.getContext('2d');
-        const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-        grad.addColorStop(0, 'rgba(255,255,255,1)');
-        grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
-        grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 32, 32);
-        return new THREE.CanvasTexture(canvas);
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(canvas);
     }
 
     function createStarfield() {
-        const geo = new THREE.BufferGeometry();
-        const pos = [];
-        const cols = [];
-        for (let i = 0; i < 15000; i++) {
-        pos.push(
-            (Math.random() - 0.5) * 8000,
-            (Math.random() - 0.5) * 8000,
-            (Math.random() - 0.5) * 8000
-        );
-        const c = new THREE.Color().setHSL(
-            0.6 + Math.random() * 0.1,
-            0.8,
-            0.8
-        );
+    const geo = new THREE.BufferGeometry();
+    const pos = [];
+    const cols = [];
+    for (let i = 0; i < 15000; i++) {
+        pos.push((Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000, (Math.random() - 0.5) * 8000);
+        const c = new THREE.Color().setHSL(0.6 + Math.random() * 0.1, 0.8, 0.8);
         cols.push(c.r, c.g, c.b);
-        }
-        geo.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(pos, 3)
-        );
-        geo.setAttribute(
-        'color',
-        new THREE.Float32BufferAttribute(cols, 3)
-        );
-        const mat = new THREE.PointsMaterial({
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    const mat = new THREE.PointsMaterial({
         size: 3,
         vertexColors: true,
         transparent: true,
         opacity: 0.6,
         blending: THREE.AdditiveBlending,
-        });
-        scene.add(new THREE.Points(geo, mat));
+    });
+    scene.add(new THREE.Points(geo, mat));
     }
 
     function createParticleSystem() {
-        targetPositions = SHAPES.map((s) =>
-        s.generator(CONFIG.particleCount, CONFIG.shapeSize)
-        );
+    targetPositions = SHAPES.map((s) => s.generator(CONFIG.particleCount, CONFIG.shapeSize));
+    currentShapeIndex = 3;
+    currentPositions = new Float32Array(targetPositions[currentShapeIndex]);
+    sourcePositions = new Float32Array(targetPositions[currentShapeIndex]);
+    swarmPositions = new Float32Array(CONFIG.particleCount * 3);
 
-        currentShapeIndex = 3;
-        currentPositions = new Float32Array(
-        targetPositions[currentShapeIndex]
-        );
-        sourcePositions = new Float32Array(
-        targetPositions[currentShapeIndex]
-        );
-        swarmPositions = new Float32Array(CONFIG.particleCount * 3);
+    particlesGeometry = new THREE.BufferGeometry();
+    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
 
-        particlesGeometry = new THREE.BufferGeometry();
-        particlesGeometry.setAttribute(
-        'position',
-        new THREE.BufferAttribute(currentPositions, 3)
-        );
+    particleSizes = new Float32Array(CONFIG.particleCount);
+    particleOpacities = new Float32Array(CONFIG.particleCount);
+    particleEffectStrengths = new Float32Array(CONFIG.particleCount);
+    aShineArray = new Float32Array(CONFIG.particleCount);
 
-        particleSizes = new Float32Array(CONFIG.particleCount);
-        particleOpacities = new Float32Array(CONFIG.particleCount);
-        particleEffectStrengths = new Float32Array(CONFIG.particleCount);
-        aShineArray = new Float32Array(CONFIG.particleCount);
-
-        const colors = new Float32Array(CONFIG.particleCount * 3);
-        for (let i = 0; i < CONFIG.particleCount; i++) {
+    const colors = new Float32Array(CONFIG.particleCount * 3);
+    for (let i = 0; i < CONFIG.particleCount; i++) {
         particleSizes[i] = Math.random() * 2 + 0.5;
         particleOpacities[i] = 0.6 + Math.random() * 0.4;
         particleEffectStrengths[i] = 0.0;
         aShineArray[i] = 0.0;
-        }
+    }
 
-        particlesGeometry.setAttribute(
-        'size',
-        new THREE.BufferAttribute(particleSizes, 1)
-        );
-        particlesGeometry.setAttribute(
-        'opacity',
-        new THREE.BufferAttribute(particleOpacities, 1)
-        );
-        particlesGeometry.setAttribute(
-        'aEffectStrength',
-        new THREE.BufferAttribute(particleEffectStrengths, 1)
-        );
-        particlesGeometry.setAttribute(
-        'aShine',
-        new THREE.BufferAttribute(aShineArray, 1)
-        );
-        particlesGeometry.setAttribute(
-        'color',
-        new THREE.BufferAttribute(colors, 3)
-        );
+    particlesGeometry.setAttribute('size', new THREE.BufferAttribute(particleSizes, 1));
+    particlesGeometry.setAttribute('opacity', new THREE.BufferAttribute(particleOpacities, 1));
+    particlesGeometry.setAttribute('aEffectStrength', new THREE.BufferAttribute(particleEffectStrengths, 1));
+    particlesGeometry.setAttribute('aShine', new THREE.BufferAttribute(aShineArray, 1));
+    particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-        updateColors(currentHue);
+    updateColors(currentHue);
 
-        particlesMaterial = new THREE.ShaderMaterial({
+    particlesMaterial = new THREE.ShaderMaterial({
         uniforms: {
-            pointTexture: { value: createStarTexture() },
+        pointTexture: { value: createStarTexture() },
         },
         vertexShader: `
-            attribute float size;
-            attribute float opacity;
-            attribute float aEffectStrength;
-            attribute float aShine;
-            varying vec3 vColor;
-            varying float vOpacity;
-            varying float vShine;
-            void main() {
+        attribute float size;
+        attribute float opacity;
+        attribute float aEffectStrength;
+        attribute float aShine;
+        varying vec3 vColor;
+        varying float vOpacity;
+        varying float vShine;
+        void main() {
             vColor = color;
             vOpacity = opacity;
             vShine = aShine;
@@ -1276,363 +1230,367 @@
             float finalSize = size * (1.0 + aEffectStrength * 2.0 + aShine * 5.0);
             gl_PointSize = finalSize * (400.0 / -mvPosition.z);
             gl_Position = projectionMatrix * mvPosition;
-            }
+        }
         `,
         fragmentShader: `
-            uniform sampler2D pointTexture;
-            varying vec3 vColor;
-            varying float vOpacity;
-            varying float vShine;
-            void main() {
+        uniform sampler2D pointTexture;
+        varying vec3 vColor;
+        varying float vOpacity;
+        varying float vShine;
+        void main() {
             vec4 tex = texture2D(pointTexture, gl_PointCoord);
             if (tex.a < 0.05) discard;
             vec3 finalColor = vColor + (vec3(1.0) * vShine * 2.0);
             gl_FragColor = vec4(finalColor, tex.a * vOpacity);
-            }
+        }
         `,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         transparent: true,
         vertexColors: true,
-        });
+    });
 
-        particleSystem = new THREE.Points(
-        particlesGeometry,
-        particlesMaterial
-        );
-        scene.add(particleSystem);
+    particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+    scene.add(particleSystem);
     }
 
     function updateColors(hueBase) {
-        const colors = particlesGeometry.attributes.color.array;
-        const pos = particlesGeometry.attributes.position.array;
-        for (let i = 0; i < CONFIG.particleCount; i++) {
-        const x = pos[i * 3],
-            y = pos[i * 3 + 1],
-            z = pos[i * 3 + 2];
+    const colors = particlesGeometry.attributes.color.array;
+    const pos = particlesGeometry.attributes.position.array;
+    for (let i = 0; i < CONFIG.particleCount; i++) {
+        const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
         const dist = Math.sqrt(x * x + y * y + z * z);
-        const noiseVal = noise3D(
-            x * 0.002,
-            y * 0.002,
-            z * 0.002
-        );
-        let h =
-            hueBase +
-            dist * 0.0005 +
-            noiseVal * 0.1;
+        const noiseVal = noise3D(x * 0.002, y * 0.002, z * 0.002);
+        let h = hueBase + dist * 0.0005 + noiseVal * 0.1;
         if (h > 1) h -= 1;
-        const c = new THREE.Color().setHSL(
-            h,
-            0.8,
-            0.6 + noiseVal * 0.2
-        );
+        const c = new THREE.Color().setHSL(h, 0.8, 0.6 + noiseVal * 0.2);
         colors[i * 3] = c.r;
         colors[i * 3 + 1] = c.g;
         colors[i * 3 + 2] = c.b;
-        }
-        particlesGeometry.attributes.color.needsUpdate = true;
+    }
+    particlesGeometry.attributes.color.needsUpdate = true;
     }
 
     function triggerHueShift() {
-        currentHue = Math.random();
-        window.currentHue = currentHue;
-        updateColors(currentHue);
-
-        anime({
+    currentHue = Math.random();
+    window.currentHue = currentHue;
+    updateColors(currentHue);
+    anime({
         targets: particlesGeometry.attributes.aShine.array,
         0: 0,
         update: () => {
-            for (let i = 0; i < CONFIG.particleCount; i++) {
+        for (let i = 0; i < CONFIG.particleCount; i++) {
             if (Math.random() < 0.05) {
-                particlesGeometry.attributes.aShine.array[i] =
-                Math.max(
-                    0,
-                    particlesGeometry.attributes.aShine.array[i] -
-                    0.05
-                );
+            particlesGeometry.attributes.aShine.array[i] = Math.max(0, particlesGeometry.attributes.aShine.array[i] - 0.05);
             }
-            if (Math.random() < 0.01)
-                particlesGeometry.attributes.aShine.array[i] = 1.0;
-            }
-            particlesGeometry.attributes.aShine.needsUpdate = true;
+            if (Math.random() < 0.01) particlesGeometry.attributes.aShine.array[i] = 1.0;
+        }
+        particlesGeometry.attributes.aShine.needsUpdate = true;
         },
         easing: 'easeOutExpo',
         duration: 1000,
-        });
+    });
     }
 
     function triggerMorph() {
-        if (isMorphing) return;
-        isMorphing = true;
-
-        const nextIndex = (currentShapeIndex + 1) % SHAPES.length;
-        sourcePositions.set(currentPositions);
-        const targets = targetPositions[nextIndex];
-
-        const tempVec = new THREE.Vector3();
-        const sVec = new THREE.Vector3();
-        const tVec = new THREE.Vector3();
-
-        for (let i = 0; i < CONFIG.particleCount; i++) {
+    if (isMorphing) return;
+    isMorphing = true;
+    const nextIndex = (currentShapeIndex + 1) % SHAPES.length;
+    sourcePositions.set(currentPositions);
+    const targets = targetPositions[nextIndex];
+    const tempVec = new THREE.Vector3();
+    const sVec = new THREE.Vector3();
+    const tVec = new THREE.Vector3();
+    for (let i = 0; i < CONFIG.particleCount; i++) {
         sVec.fromArray(sourcePositions, i * 3);
         tVec.fromArray(targets, i * 3);
-
         tempVec.lerpVectors(sVec, tVec, 0.5);
-        const noiseDir = new THREE.Vector3(
-            noise3D(i, 0, 0),
-            noise3D(0, i, 0),
-            noise3D(0, 0, i)
-        ).normalize();
-        tempVec.addScaledVector(
-            noiseDir,
-            CONFIG.shapeSize * 1.5
-        );
-
+        const noiseDir = new THREE.Vector3(noise3D(i, 0, 0), noise3D(0, i, 0), noise3D(0, 0, i)).normalize();
+        tempVec.addScaledVector(noiseDir, CONFIG.shapeSize * 1.5);
         swarmPositions[i * 3] = tempVec.x;
         swarmPositions[i * 3 + 1] = tempVec.y;
         swarmPositions[i * 3 + 2] = tempVec.z;
-        }
-
-        currentShapeIndex = nextIndex;
-        morphState.progress = 0;
-
-        if (morphTimeline) morphTimeline.pause();
-        morphTimeline = anime({
+    }
+    currentShapeIndex = nextIndex;
+    morphState.progress = 0;
+    if (morphTimeline) morphTimeline.pause();
+    morphTimeline = anime({
         targets: morphState,
         progress: 1,
         duration: CONFIG.morphDuration,
         easing: 'easeInOutCubic',
         complete: () => {
-            isMorphing = false;
-            updateColors(currentHue);
+        isMorphing = false;
+        updateColors(currentHue);
         },
+    });
+    }
+
+    function triggerPhase() {
+    phaseState.origin.copy(camera.position);
+    phaseState.startTime = clock.getElapsedTime();
+    phaseState.active = true;
+    if (!isPhasing) {
+        isPhasing = true;
+        anime({
+        targets: aShineArray,
+        update: () => {
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+            aShineArray[i] = Math.min(1, aShineArray[i] + 0.15);
+            }
+            particlesGeometry.attributes.aShine.needsUpdate = true;
+        },
+        duration: 150,
+        easing: 'linear',
+        complete: () => { isPhasing = false; },
         });
     }
-
-    function handleCButtonClick() {
-        if (cClickTimeout) clearTimeout(cClickTimeout);
-        cClickCount += 1;
-        cClickTimeout = setTimeout(() => {
-        if (cClickCount === 1) {
-            window.gameData.settings.accelEnabled =
-            !window.gameData.settings.accelEnabled;
-        } else if (cClickCount === 2) {
-            triggerMorph();
-        }
-        cClickCount = 0;
-        cClickTimeout = null;
-        }, 250);
     }
 
+const DOUBLE_CLICK_DELAY = 500; // ms
+
+// *** FIXED C BUTTON: Single = Morph, Double = Toggle Accel ***
+function handleCButtonClick() {
+    cClickCount++;
+    
+    if (cClickTimer) clearTimeout(cClickTimer);
+    
+    if (cClickCount === 2) {
+        // Double click detected IMMEDIATELY - execute and reset
+        clearTimeout(cClickTimer);
+        window.gameData.settings.accelEnabled = !window.gameData.settings.accelEnabled;
+        cClickCount = 0;
+        cClickTimer = null;
+        console.log("C Double Click: Accel Toggled");
+        return;
+    }
+    
+    // First click - wait for possible second click
+    cClickTimer = setTimeout(() => {
+        if (cClickCount === 1) {
+            // Single click confirmed
+            triggerMorph();
+            console.log("C Single Click: Morph");
+        }
+        cClickCount = 0;
+        cClickTimer = null;
+    }, DOUBLE_CLICK_DELAY);
+}
+
+// *** FIXED Z BUTTON: Single = Phase, Double = Hue Shift ***
+function handleZButtonClick() {
+    zClickCount++;
+    
+    if (zClickTimer) clearTimeout(zClickTimer);
+    
+    if (zClickCount === 2) {
+        // Double click detected IMMEDIATELY - execute and reset
+        clearTimeout(zClickTimer);
+        triggerHueShift();
+        console.log("Z Double Click: Hue Shift");
+        zClickCount = 0;
+        zClickTimer = null;
+        return;
+    }
+    
+    // First click - wait for possible second click
+    zClickTimer = setTimeout(() => {
+        if (zClickCount === 1) {
+            // Single click confirmed
+            triggerPhase();
+            console.log("Z Single Click: Phase");
+        }
+        zClickCount = 0;
+        zClickTimer = null;
+    }, DOUBLE_CLICK_DELAY);
+}
+
     function animate() {
-        requestAnimationFrame(animate);
-        const dt = clock.getDelta();
-        const time = clock.getElapsedTime();
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    const time = clock.getElapsedTime();
+    const inputs = window.gameData.inputs;
+    const settings = window.gameData.settings;
 
-        const inputs = window.gameData.inputs;
-        const settings = window.gameData.settings;
-
-        if (inputs.c === 1 && !cPressed) {
+    // C BUTTON HANDLING (NEW BEHAVIOR)
+    if (inputs.c === 1 && !cPressed) {
         handleCButtonClick();
         cPressed = true;
-        } else if (inputs.c === 0) {
+    } else if (inputs.c === 0) {
         cPressed = false;
-        }
+    }
 
-        let speedMult = 1.0;
-        if (inputs.z === 1) {
-        speedMult = 3.0;
-        if (!zPressed) {
-            triggerHueShift();
-            zPressed = true;
-        }
-        } else {
+    let speedMult = 1.0;
+    if (inputs.z === 1 && !zPressed) {
+        handleZButtonClick();
+        zPressed = true;
+        speedMult = 3.0; // Z hold still speeds up movement
+    } else if (inputs.z === 0) {
         zPressed = false;
-        }
+    }
 
-        let targetPitch = 0;
-        let targetRoll = 0;
-        if (settings.accelEnabled) {
-        const mapRange = (val, min, max, a, b) =>
-            ((val - min) * (b - a)) / (max - min) + a;
 
+    // *** EXACT ORIGINAL ACCELEROMETER & STICK INPUTS ***
+    let targetPitch = 0;
+    let targetRoll = 0;
+    if (settings.accelEnabled) {
+        const mapRange = (val, min, max, a, b) => ((val - min) * (b - a)) / (max - min) + a;
         let rawX = mapRange(inputs.ax, 300, 720, -1, 1);
         let rawY = mapRange(inputs.ay, 300, 720, -1, 1);
-
         const accelDZ = settings.deadzone || 0.2;
         rawX = Math.abs(rawX) < accelDZ ? 0 : rawX;
         rawY = Math.abs(rawY) < accelDZ ? 0 : rawY;
-
         let ctrlX = settings.accelEnableX ? rawX : 0;
         let ctrlY = settings.accelEnableY ? rawY : 0;
-
         if (settings.invertX) ctrlX *= -1;
         if (settings.invertY) ctrlY *= -1;
         if (settings.invertAccelTilt) ctrlY *= -1;
-
-        const accelSens =
-            settings.accelSensitivity ||
-            settings.sensitivity ||
-            1.5;
-
+        const accelSens = settings.accelSensitivity || settings.sensitivity || 1.5;
         targetRoll = -ctrlX * accelSens;
         targetPitch = ctrlY * accelSens;
-        }
+    }
 
-        smoothPitch += (targetPitch - smoothPitch) * 0.1;
-        smoothRoll += (targetRoll - smoothRoll) * 0.1;
-        camera.rotateX(smoothPitch * dt);
-        camera.rotateZ(smoothRoll * dt * 0.5);
+    smoothPitch += (targetPitch - smoothPitch) * 0.1;
+    smoothRoll += (targetRoll - smoothRoll) * 0.1;
+    camera.rotateX(smoothPitch * dt);
+    camera.rotateZ(smoothRoll * dt * 0.5);
 
-        let throttle = 0;
-        let strafe = 0;
-        const stickDZ = settings.stickDeadzone || 10;
-
-        if (Math.abs(inputs.jy - 128) > stickDZ) {
+    // *** EXACT ORIGINAL STICK INPUTS ***
+    let throttle = 0;
+    let strafe = 0;
+    const stickDZ = settings.stickDeadzone || 10;
+    if (Math.abs(inputs.jy - 128) > stickDZ) {
         let v = -(inputs.jy - 128) / 128;
         if (settings.invertStickY) v *= -1;
         throttle += v;
-        }
-        if (Math.abs(inputs.jx - 128) > stickDZ) {
+    }
+    if (Math.abs(inputs.jx - 128) > stickDZ) {
         strafe += (inputs.jx - 128) / 128;
-        }
-
-        if (window.mouseDownForNav) {
+    }
+    if (window.mouseDownForNav) {
         const keys = window.keysForNav;
         if (keys['w'] || keys['arrowup']) throttle += 1;
         if (keys['s'] || keys['arrowdown']) throttle -= 1;
         if (keys['a'] || keys['arrowleft']) strafe -= 1;
         if (keys['d'] || keys['arrowright']) strafe += 1;
+    }
+    throttle = Math.max(-1, Math.min(1, throttle));
+    strafe = Math.max(-1, Math.min(1, strafe));
+    const stickSens = settings.stickSensitivity || 1.5;
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const moveForce = new THREE.Vector3()
+        .addScaledVector(forward, throttle * stickSens * CONFIG.maxSpeed * speedMult * dt)
+        .addScaledVector(right, strafe * stickSens * CONFIG.maxSpeed * dt);
+    velocity.add(moveForce);
+    velocity.multiplyScalar(CONFIG.drag);
+    camera.position.add(velocity);
+
+    window.gameData.telemetry.x = camera.position.x;
+    window.gameData.telemetry.y = camera.position.y;
+    window.gameData.telemetry.z = camera.position.z;
+    window.gameData.telemetry.speed = velocity.length() * 10;
+    window.gameData.velocity = { x: velocity.x, y: velocity.y, z: velocity.z };
+
+    const posAttr = particlesGeometry.attributes.position;
+    const effAttr = particlesGeometry.attributes.aEffectStrength;
+    const t = morphState.progress;
+    const targetShape = targetPositions[currentShapeIndex];
+    const t_inv = 1 - t;
+    const t_sq = t * t;
+    const t_inv_sq = t_inv * t_inv;
+    const p0 = new THREE.Vector3();
+    const p1 = new THREE.Vector3();
+    const p2 = new THREE.Vector3();
+    const res = new THREE.Vector3();
+    const timeNow = clock.getElapsedTime();
+    const noiseTime = timeNow * 0.2;
+
+    let phaseActive = false;
+    let phaseRadius = 0;
+    const phaseThickness = CONFIG.shapeSize * 0.25;
+    const phaseAmplitude = CONFIG.shapeSize * 0.25;
+    if (phaseState.active) {
+        const elapsed = timeNow - phaseState.startTime;
+        if (elapsed >= 0 && elapsed <= phaseState.duration) {
+        phaseActive = true;
+        phaseRadius = Math.min(elapsed * phaseState.speed, phaseState.radiusMax);
+        } else {
+        phaseState.active = false;
         }
+    }
 
-        throttle = Math.max(-1, Math.min(1, throttle));
-        strafe = Math.max(-1, Math.min(1, strafe));
-
-        const stickSens = settings.stickSensitivity || 1.5;
-
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
-        camera.quaternion
-        );
-        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(
-        camera.quaternion
-        );
-
-        const moveForce = new THREE.Vector3()
-        .addScaledVector(
-            forward,
-            throttle * stickSens * CONFIG.maxSpeed * speedMult * dt
-        )
-        .addScaledVector(
-            right,
-            strafe * stickSens * CONFIG.maxSpeed * dt
-        );
-
-        velocity.add(moveForce);
-        velocity.multiplyScalar(CONFIG.drag);
-        camera.position.add(velocity);
-
-        window.gameData.telemetry.x = camera.position.x;
-        window.gameData.telemetry.y = camera.position.y;
-        window.gameData.telemetry.z = camera.position.z;
-        window.gameData.telemetry.speed = velocity.length() * 10;
-        window.gameData.velocity = {
-        x: velocity.x,
-        y: velocity.y,
-        z: velocity.z,
-        };
-
-        const posAttr = particlesGeometry.attributes.position;
-        const effAttr = particlesGeometry.attributes.aEffectStrength;
-        const t = morphState.progress;
-        const targetShape = targetPositions[currentShapeIndex];
-        const t_inv = 1 - t;
-        const t_sq = t * t;
-        const t_inv_sq = t_inv * t_inv;
-
-        const p0 = new THREE.Vector3();
-        const p1 = new THREE.Vector3();
-        const p2 = new THREE.Vector3();
-        const res = new THREE.Vector3();
-        const noiseTime = time * 0.2;
-
-        for (let i = 0; i < CONFIG.particleCount; i++) {
+    for (let i = 0; i < CONFIG.particleCount; i++) {
         const i3 = i * 3;
         if (isMorphing) {
-            p0.fromArray(sourcePositions, i3);
-            p1.fromArray(swarmPositions, i3);
-            p2.fromArray(targetShape, i3);
-
-            res
-            .copy(p0)
-            .multiplyScalar(t_inv_sq)
-            .addScaledVector(p1, 2 * t_inv * t)
-            .addScaledVector(p2, t_sq);
-
-            const swirlStr =
-            Math.sin(t * Math.PI) * CONFIG.swirlFactor;
-            if (swirlStr > 0.1) {
+        p0.fromArray(sourcePositions, i3);
+        p1.fromArray(swarmPositions, i3);
+        p2.fromArray(targetShape, i3);
+        res.copy(p0).multiplyScalar(t_inv_sq).addScaledVector(p1, 2 * t_inv * t).addScaledVector(p2, t_sq);
+        const swirlStr = Math.sin(t * Math.PI) * CONFIG.swirlFactor;
+        if (swirlStr > 0.1) {
             const swirlDir = new THREE.Vector3(
-                noise3D(p1.x * 0.01, time, 0),
-                noise3D(0, p1.y * 0.01, time),
-                noise3D(time, 0, p1.z * 0.01)
+            noise3D(p1.x * 0.01, timeNow, 0),
+            noise3D(0, p1.y * 0.01, timeNow),
+            noise3D(timeNow, 0, p1.z * 0.01)
             ).normalize();
-            const offset = new THREE.Vector3()
-                .crossVectors(res, swirlDir)
-                .multiplyScalar(swirlStr * 2);
+            const offset = new THREE.Vector3().crossVectors(res, swirlDir).multiplyScalar(swirlStr * 2);
             res.add(offset);
-            }
-            effAttr.array[i] = Math.sin(t * Math.PI);
+        }
+        effAttr.array[i] = Math.sin(t * Math.PI);
         } else {
-            res.fromArray(targetShape, i3);
-            const nX = noise4D(
-            res.x * 0.005,
-            res.y * 0.005,
-            res.z * 0.005,
-            noiseTime
-            );
-            const nY = noise4D(
-            res.x * 0.005 + 100,
-            res.y * 0.005,
-            res.z * 0.005,
-            noiseTime
-            );
-            const nZ = noise4D(
-            res.x * 0.005 + 200,
-            res.y * 0.005,
-            res.z * 0.005,
-            noiseTime
-            );
-            res.x += nX * 10;
-            res.y += nY * 10;
-            res.z += nZ * 10;
-            if (aShineArray[i] > 0) aShineArray[i] *= 0.95;
-            effAttr.array[i] = 0;
+        res.fromArray(targetShape, i3);
+        const nX = noise4D(res.x * 0.005, res.y * 0.005, res.z * 0.005, noiseTime);
+        const nY = noise4D(res.x * 0.005 + 100, res.y * 0.005, res.z * 0.005, noiseTime);
+        const nZ = noise4D(res.x * 0.005 + 200, res.y * 0.005, res.z * 0.005, noiseTime);
+        res.x += nX * 10;
+        res.y += nY * 10;
+        res.z += nZ * 10;
+        if (aShineArray[i] > 0) aShineArray[i] *= 0.95;
+        effAttr.array[i] = 0;
+        }
+
+        if (phaseActive) {
+        const v = new THREE.Vector3(res.x, res.y, res.z).sub(phaseState.origin);
+        const dist = v.length();
+        if (dist > 0.0001) {
+            const d = Math.abs(dist - phaseRadius);
+            const shell = 1.0 - THREE.MathUtils.clamp(d / phaseThickness, 0.0, 1.0);
+            if (shell > 0.0) {
+            v.divideScalar(dist);
+            const push = phaseAmplitude * shell;
+            res.addScaledVector(v, push);
+            effAttr.array[i] += shell * 0.7;
+            aShineArray[i] = Math.min(1.0, aShineArray[i] + shell);
+            }
+        }
         }
 
         posAttr.array[i3] = res.x;
         posAttr.array[i3 + 1] = res.y;
         posAttr.array[i3 + 2] = res.z;
-        }
+    }
 
-        posAttr.needsUpdate = true;
-        effAttr.needsUpdate = true;
-        particlesGeometry.attributes.aShine.needsUpdate = true;
+    posAttr.needsUpdate = true;
+    effAttr.needsUpdate = true;
+    particlesGeometry.attributes.aShine.needsUpdate = true;
 
-        composer.render();
+    composer.render();
     }
 
     function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        composer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
     }
 
     window.triggerHueShift = triggerHueShift;
     window.triggerMorph = triggerMorph;
-
+    window.triggerPhase = triggerPhase;
     init();
     </script>
+
 
 </body>
 </html>
